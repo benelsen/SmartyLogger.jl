@@ -59,7 +59,7 @@ services:
     #     volumes:
     #         - "pg_db_data:/var/lib/postgresql/data"
 
-    # influx_db:
+    # db:
     #     image: influxdb
     #     restart: unless-stopped
     #     ports:
