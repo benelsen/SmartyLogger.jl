@@ -1,0 +1,17 @@
+FROM julia:1.0
+
+WORKDIR /usr/logger/
+ENV JULIA_PROJECT=/usr/logger
+
+COPY Manifest.toml /usr/logger/Manifest.toml
+COPY Project.toml /usr/logger/Project.toml
+
+RUN julia -e 'using Pkg; pkg"activate ."'
+RUN julia -e 'using Pkg; pkg"instantiate"'
+RUN julia -e 'using Pkg; pkg"precompile"'
+
+COPY src/*.jl /usr/logger/src/
+
+COPY wait-for-it.sh /usr/logger/wait-for-it.sh
+
+CMD ["julia", "-v"]

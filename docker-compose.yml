@@ -1,0 +1,90 @@
+version: "3"
+
+volumes:
+    pg_db_data:
+    influx_db_data:
+    influx_db_conf:
+    log_data:
+    julia_cache:
+
+networks:
+    dumbhome_default:
+        external: true
+
+services:
+
+    logger:
+        build:
+            context: .
+            dockerfile: Dockerfile-logger
+        depends_on:
+            - "pigpiod"
+            - "socat"
+            # - "influx_db"
+        working_dir: /usr/logger
+        volumes:
+            - "log_data:/usr/logger/log"
+            - "julia_cache:/root/.julia"
+        restart: unless-stopped
+        env_file:
+            - "logger.env"
+        command: ./wait-for-it.sh socat:58100 -s -- ./wait-for-it.sh pigpiod:8888 -s -- ./wait-for-it.sh db:8086 -s -- julia -O3 src/SmartyLogger.jl
+        networks:
+            - default
+            - dumbhome_default
+
+    socat:
+        build:
+            context: .
+            dockerfile: Dockerfile-socat
+        command: socat -d -d TCP-LISTEN:58100,reuseaddr,fork file:/dev/ttyAMA0,b115200,raw,echo=0
+        devices:
+            - "/dev/ttyAMA0:/dev/ttyAMA0"
+        restart: unless-stopped
+
+    pigpiod:
+        build:
+            context: .
+            dockerfile: Dockerfile-pigpiod
+        privileged: true
+        restart: unless-stopped
+        devices:
+            - "/dev/gpiomem:/dev/gpiomem"
+        #     - "/dev/gpiochip0:/dev/gpiochip0"
+        #     - "/dev/gpiochip1:/dev/gpiochip1"
+        #     - "/dev/gpiochip2:/dev/gpiochip2"
+        #     - "/dev/mem:/dev/mem"
+        # user: root
+        # cap_add:
+        #     - ALL
+        # ports:
+        #     - "8888"
+        # volumes:
+        #     - "/lib/modules:/lib/modules"
+        #     - "/sys:/sys"
+
+    # pg_db:
+    #     image: postgres
+    #     restart: unless-stopped
+    #     ports:
+    #         - "5432"
+    #     volumes:
+    #         - "pg_db_data:/var/lib/postgresql/data"
+
+    # influx_db:
+    #     image: influxdb
+    #     restart: unless-stopped
+    #     ports:
+    #         - "8086"
+    #         - "8088"
+    #         - "18089/udp"
+    #     volumes:
+    #         - influx_db_data:/var/lib/influxdb/
+    #         - influx_db_conf:/etc/influxdb/
+
+    # ping:
+    #     image: debian
+    #     command: ping db
+    #     networks:
+    #         - default
+    #         - dumbhome_default
