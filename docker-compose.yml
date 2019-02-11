@@ -1,9 +1,9 @@
 version: "3"
 
 volumes:
-    pg_db_data:
-    influx_db_data:
-    influx_db_conf:
+    # pg_db_data:
+    # influx_db_data:
+    # influx_db_conf:
     log_data:
     julia_cache:
 
@@ -17,18 +17,18 @@ services:
         build:
             context: .
             dockerfile: Dockerfile-logger
+        working_dir: /usr/logger
+        command: ./wait-for-it.sh socat:58100 -s -- ./wait-for-it.sh pigpiod:8888 -s -- ./wait-for-it.sh db:8086 -s -- julia -O3 src/SmartyLogger.jl
+        restart: unless-stopped
+        env_file:
+            - "logger.env"
         depends_on:
             - "pigpiod"
             - "socat"
             # - "influx_db"
-        working_dir: /usr/logger
         volumes:
             - "log_data:/usr/logger/log"
             - "julia_cache:/root/.julia"
-        restart: unless-stopped
-        env_file:
-            - "logger.env"
-        command: ./wait-for-it.sh socat:58100 -s -- ./wait-for-it.sh pigpiod:8888 -s -- ./wait-for-it.sh db:8086 -s -- julia -O3 src/SmartyLogger.jl
         networks:
             - default
             - dumbhome_default
@@ -38,9 +38,9 @@ services:
             context: .
             dockerfile: Dockerfile-socat
         command: socat -d -d TCP-LISTEN:58100,reuseaddr,fork file:/dev/ttyAMA0,b115200,raw,echo=0
+        restart: unless-stopped
         devices:
             - "/dev/ttyAMA0:/dev/ttyAMA0"
-        restart: unless-stopped
 
     pigpiod:
         build:
@@ -50,18 +50,6 @@ services:
         restart: unless-stopped
         devices:
             - "/dev/gpiomem:/dev/gpiomem"
-        #     - "/dev/gpiochip0:/dev/gpiochip0"
-        #     - "/dev/gpiochip1:/dev/gpiochip1"
-        #     - "/dev/gpiochip2:/dev/gpiochip2"
-        #     - "/dev/mem:/dev/mem"
-        # user: root
-        # cap_add:
-        #     - ALL
-        # ports:
-        #     - "8888"
-        # volumes:
-        #     - "/lib/modules:/lib/modules"
-        #     - "/sys:/sys"
 
     # pg_db:
     #     image: postgres
