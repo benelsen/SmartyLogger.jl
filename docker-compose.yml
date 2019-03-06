@@ -18,12 +18,13 @@ services:
             context: .
             dockerfile: Dockerfile-logger
         working_dir: /usr/logger
-        command: ./wait-for-it.sh socat:58100 -s -- ./wait-for-it.sh pigpiod:8888 -s -- ./wait-for-it.sh db:8086 -s -- julia -O3 src/SmartyLogger.jl
+        command: ./wait-for-it.sh socat:58100 -s -- ./wait-for-it.sh db:8086 -s -- julia -O3 src/SmartyLogger.jl
+        # -- ./wait-for-it.sh pigpiod:8888 -s
         restart: unless-stopped
         env_file:
             - "logger.env"
         depends_on:
-            - "pigpiod"
+            # - "pigpiod"
             - "socat"
             # - "influx_db"
         volumes:
@@ -42,14 +43,16 @@ services:
         devices:
             - "/dev/ttyAMA0:/dev/ttyAMA0"
 
-    pigpiod:
-        build:
-            context: .
-            dockerfile: Dockerfile-pigpiod
-        privileged: true
-        restart: unless-stopped
-        devices:
-            - "/dev/gpiomem:/dev/gpiomem"
+    # TODO: breaks on reboots
+    # WORKAROUND: Just hardwire the enable pin to low ¯\_(ツ)_/¯
+    # pigpiod:
+    #     build:
+    #         context: .
+    #         dockerfile: Dockerfile-pigpiod
+    #     privileged: true
+    #     restart: unless-stopped
+    #     devices:
+    #         - "/dev/gpiomem:/dev/gpiomem"
 
     # pg_db:
     #     image: postgres

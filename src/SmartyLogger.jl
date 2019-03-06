@@ -2,7 +2,8 @@ using Sockets, Logging, Dates
 @info "Starting…"
 
 using HTTP, Parameters, TimeZones
-using PiGPIO, Smarty
+using Smarty
+# using PiGPIO
 
 include("influx.jl")
 
@@ -14,12 +15,12 @@ const influxdb_port = 8086
 const socat_host = "socat"
 const socat_port = 58100
 
-const pigpiod_host = "pigpiod"
-const pigpiod_port = 8888
+# const pigpiod_host = "pigpiod"
+# const pigpiod_port = 8888
 
-const pi = PiGPIO.Pi(host = pigpiod_host, port = pigpiod_port)
-PiGPIO.set_mode(pi, 24, PiGPIO.OUTPUT)
-PiGPIO.write(pi, 24, PiGPIO.HIGH)
+# const pi = PiGPIO.Pi(host = pigpiod_host, port = pigpiod_port)
+# PiGPIO.set_mode(pi, 24, PiGPIO.OUTPUT)
+# PiGPIO.write(pi, 24, PiGPIO.HIGH)
 
 function reader(input_io::IO, channel_encrypted::Channel{EncryptedPacket}, log_bin_io::IO)
     flush(input_io)
@@ -163,7 +164,7 @@ function run_()
     task_reader = @async reader(sock, channel_encrypted, log_bin_io)
 
     @info "$(now_utc_string()): " * "Setting low"
-    PiGPIO.write(pi, 24, PiGPIO.LOW)
+    # PiGPIO.write(pi, 24, PiGPIO.LOW)
 
     @info "$(now_utc_string()): " * "Ready"
     yield()
