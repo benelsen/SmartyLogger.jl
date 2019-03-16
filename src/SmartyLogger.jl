@@ -23,7 +23,6 @@ const socat_port = 58100
 # PiGPIO.write(pi, 24, PiGPIO.HIGH)
 
 function reader(input_io::IO, channel_encrypted::Channel{EncryptedPacket}, log_bin_io::IO)
-    flush(input_io)
 
     while !eof(input_io)
         @debug "$(now_utc_string()): " * "reader: trying to read from input"
@@ -34,7 +33,6 @@ function reader(input_io::IO, channel_encrypted::Channel{EncryptedPacket}, log_b
             @debug "$(now_utc_string()): " * "reader: put EncryptedPacket into channel"
             write(log_bin_io, p)
             @debug "$(now_utc_string()): " * "reader: wrote EncryptedPacket to log.bin"
-            flush(log_bin_io)
         catch e
             if isa(e, ErrorException) && e.msg == "Could not parse EncryptedPacket. Unexpected start byte"
                 @warn "$(now_utc_string()): " * "unexpected start byte"
@@ -62,7 +60,6 @@ function decrypt(channel_encrypted::Channel{EncryptedPacket}, channel_decrypted:
         plaintext = String(deepcopy(decrypted_packet.plaintext))
         write(log_txt_io, plaintext, "\n")
         @debug "$(now_utc_string()): " * "decrypt: wrote DecryptedPacket to log.txt"
-        flush(log_txt_io)
         yield()
     end
 end
