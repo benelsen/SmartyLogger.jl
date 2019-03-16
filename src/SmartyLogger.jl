@@ -121,11 +121,11 @@ function run_()
     @debug "$(now_utc_string()): " * "Args:" ARGS
 
     @debug "$(now_utc_string()): " * "Opening log.bin"
-    log_bin_io = open("log/log.bin", "a+")
+    log_bin_io = open("log/log.bin", "a")
     atexit(() -> close(log_bin_io))
 
     @debug "$(now_utc_string()): " * "Opening log.txt"
-    log_txt_io = open("log/log.txt", "a+")
+    log_txt_io = open("log/log.txt", "a")
     atexit(() -> close(log_txt_io))
 
     @debug "$(now_utc_string()): " * "Opening tcp socket to socat"
