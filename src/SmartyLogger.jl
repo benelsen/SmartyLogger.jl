@@ -1,9 +1,9 @@
-using Sockets, Logging, Dates
+using Logging, Dates
 @info "Starting…"
 
 using HTTP, Parameters, TimeZones
+using MQTT
 using Smarty
-# using PiGPIO
 
 include("influx.jl")
 
@@ -12,9 +12,14 @@ const key = hex2bytes(ENV["SMARTY_KEY"])
 const influxdb_host = "db"
 const influxdb_port = 8086
 
-const socat_host = "socat"
-const socat_port = 58100
+const mqtt_broker_host = "broker"
+const mqtt_broker_port = 1883
 
+# using Sockets
+# const socat_host = "socat"
+# const socat_port = 58100
+
+# using PiGPIO
 # const pigpiod_host = "pigpiod"
 # const pigpiod_port = 8888
 
@@ -128,13 +133,6 @@ function run_()
     log_txt_io = open("log/log.txt", "a")
     atexit(() -> close(log_txt_io))
 
-    @debug "$(now_utc_string()): " * "Opening tcp socket to socat"
-    sock = connect(socat_host, socat_port)
-    atexit(() -> close(sock))
-
-    # support for serial ports is still unsatisfying
-    # sp = open("/dev/ttyAMA0", 115200)
-
     @debug "$(now_utc_string()): " * "Opening Channel{EncryptedPacket}"
     channel_encrypted = Channel{EncryptedPacket}(600)
     atexit(() -> close(channel_encrypted))
@@ -157,10 +155,34 @@ function run_()
     @debug "$(now_utc_string()): " * "Starting task_decrypt"
     task_decrypt = @async decrypt(channel_encrypted, channel_decrypted, log_txt_io)
 
-    @debug "$(now_utc_string()): " * "Starting task_reader"
-    task_reader = @async reader(sock, channel_encrypted, log_bin_io)
 
-    @info "$(now_utc_string()): " * "Setting low"
+    # connect using mqtt
+    @debug "$(now_utc_string()): " * "Creating mqtt client"
+    io = PipeBuffer()
+    function on_msg(topic, data)
+        if topic == "smarty_data"
+            write(io, data)
+            reader(io, channel_encrypted, log_bin_io)
+        end
+    end
+    client = Client(on_msg)
+    connect(client, mqtt_broker_host, mqtt_broker_port)
+    subscribe(client, ("smarty_data", QOS_0))
+    atexit(() -> disconnect(client))
+
+    # connect using a tcp socket
+    # @debug "$(now_utc_string()): " * "Opening tcp socket to socat"
+    # sock = connect(socat_host, socat_port)
+    # atexit(() -> close(sock))
+
+    # support for serial ports is still unsatisfying
+    # sp = open("/dev/ttyAMA0", 115200)
+
+    # @debug "$(now_utc_string()): " * "Starting task_reader"
+    # task_reader = @async reader(io, channel_encrypted, log_bin_io)
+
+
+    # @info "$(now_utc_string()): " * "Setting low"
     # PiGPIO.write(pi, 24, PiGPIO.LOW)
 
     @info "$(now_utc_string()): " * "Ready"

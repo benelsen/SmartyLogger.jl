@@ -1,7 +1,10 @@
-FROM julia:1.0
+FROM julia:1.1
+# 1.1 not available for armv7
 
 WORKDIR /usr/logger/
 ENV JULIA_PROJECT=/usr/logger
+
+RUN julia -e 'using Pkg; pkg"up"'
 
 COPY Manifest.toml /usr/logger/Manifest.toml
 COPY Project.toml /usr/logger/Project.toml

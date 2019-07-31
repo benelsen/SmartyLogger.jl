@@ -2,14 +2,17 @@ version: "3"
 
 volumes:
     # pg_db_data:
-    # influx_db_data:
-    # influx_db_conf:
+    influx_db_data:
+    influx_db_conf:
+    mosquitto_conf:
+    mosquitto_data:
+    mosquitto_log:
     log_data:
     julia_cache:
 
-networks:
-    dumbhome_default:
-        external: true
+# networks:
+    # dumbhome_default:
+        # external: true
 
 services:
 
@@ -18,21 +21,53 @@ services:
             context: .
             dockerfile: Dockerfile-logger
         working_dir: /usr/logger
-        command: ./wait-for-it.sh socat:58100 -s -- ./wait-for-it.sh db:8086 -s -- julia -O3 src/SmartyLogger.jl
-        # -- ./wait-for-it.sh pigpiod:8888 -s
+        command: ./wait-for-it.sh broker:1883 -s -- ./wait-for-it.sh db:8086 -s -- julia src/SmartyLogger.jl
         restart: unless-stopped
         env_file:
             - "logger.env"
         depends_on:
-            # - "pigpiod"
-            - "socat"
-            # - "influx_db"
+            - "db"
+            - "broker"
         volumes:
             - "log_data:/usr/logger/log"
             - "julia_cache:/root/.julia"
         networks:
             - default
-            - dumbhome_default
+            # - dumbhome_default
+
+    broker:
+        image: eclipse-mosquitto
+        restart: unless-stopped
+        ports:
+            - "1883:1883"
+            - "9001:9001"
+        volumes:
+            - mosquitto_conf:/mosquitto/config/
+            - mosquitto_data:/mosquitto/data
+            - mosquitto_log:/mosquitto/log
+
+    db:
+        image: influxdb
+        restart: unless-stopped
+        ports:
+            - "8086"
+            - "8088"
+            - "18089/udp"
+        volumes:
+            - influx_db_data:/var/lib/influxdb/
+            - influx_db_conf:/etc/influxdb/
+
+    grafana:
+        image: grafana/grafana
+        ports:
+            - "3000:3000"
+        networks:
+            - default
+            # - dumbhome_default
+        environment:
+            - GF_SECURITY_ADMIN_PASSWORD=changeme
+        depends_on:
+            - "db"
 
     socat:
         build:
@@ -45,37 +80,19 @@ services:
 
     # TODO: breaks on reboots
     # WORKAROUND: Just hardwire the enable pin to low ¯\_(ツ)_/¯
-    # pigpiod:
-    #     build:
-    #         context: .
-    #         dockerfile: Dockerfile-pigpiod
-    #     privileged: true
-    #     restart: unless-stopped
-    #     devices:
-    #         - "/dev/gpiomem:/dev/gpiomem"
+    pigpiod:
+        build:
+            context: .
+            dockerfile: Dockerfile-pigpiod
+        privileged: true
+        restart: unless-stopped
+        devices:
+            - "/dev/gpiomem:/dev/gpiomem"
 
-    # pg_db:
-    #     image: postgres
-    #     restart: unless-stopped
-    #     ports:
-    #         - "5432"
-    #     volumes:
-    #         - "pg_db_data:/var/lib/postgresql/data"
-
-    # db:
-    #     image: influxdb
-    #     restart: unless-stopped
-    #     ports:
-    #         - "8086"
-    #         - "8088"
-    #         - "18089/udp"
-    #     volumes:
-    #         - influx_db_data:/var/lib/influxdb/
-    #         - influx_db_conf:/etc/influxdb/
-
-    # ping:
-    #     image: debian
-    #     command: ping db
-    #     networks:
-    #         - default
-    #         - dumbhome_default
+    pg_db:
+        image: postgres
+        restart: unless-stopped
+        ports:
+            - "5432"
+        volumes:
+            - "pg_db_data:/var/lib/postgresql/data"

@@ -2,7 +2,7 @@
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
+MQTT = "e10d9536-0ba7-5b0f-be19-024cce3632bb"
 Parameters = "d96e819e-fc66-5662-9728-84c9c7592b0a"
 Smarty = "111ea41c-f413-11e8-0303-456ea3930024"
-Sockets = "6462fe0b-24de-5631-8697-dd941f90decc"
 TimeZones = "f269a46b-ccf7-5d73-abea-4c690281aa53"
