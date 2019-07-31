@@ -21,7 +21,7 @@ services:
             context: .
             dockerfile: Dockerfile-logger
         working_dir: /usr/logger
-        command: ./wait-for-it.sh broker:1883 -s -- ./wait-for-it.sh db:8086 -s -- julia src/SmartyLogger.jl
+        command: ./wait-for-it.sh broker:1883 -s -- ./wait-for-it.sh db:8086 -s -- julia --project=. src/SmartyLogger.jl
         restart: unless-stopped
         env_file:
             - "logger.env"
