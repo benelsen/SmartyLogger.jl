@@ -1,7 +1,7 @@
 version: "3"
 
 volumes:
-    # pg_db_data:
+    pg_db_data:
     influx_db_data:
     influx_db_conf:
     mosquitto_conf:
