@@ -4,7 +4,7 @@ from umqtt.simple import MQTTClient
 import uselect
 import uos
 
-def run(HOSTNAME, CLIENT_ID, BROKER_HOST):
+def run(hostname, client_id, broker_host, broker_port, username, password):
 
     print('Disabling REPL on UART')
     uos.dupterm(None, 1)
@@ -17,10 +17,10 @@ def run(HOSTNAME, CLIENT_ID, BROKER_HOST):
             if msg == b"reset":
                 machine.reset()
 
-    c = MQTTClient(HOSTNAME, BROKER_HOST)
+    c = MQTTClient(hostname, broker_host, broker_port, username, password)
     c.set_callback(on_msg)
     c.connect()
-    c.publish(b"smarty_control", b"logon" + b"_" + HOSTNAME + b"_" + CLIENT_ID)
+    c.publish(b"smarty_control", b"logon" + b"_" + hostname + b"_" + client_id)
     c.subscribe(b"smarty_control")
 
     poll = uselect.poll()
@@ -50,5 +50,5 @@ def run(HOSTNAME, CLIENT_ID, BROKER_HOST):
     print('disabling')
     en1.value(1)
 
-    c.publish(b"smarty_control", b"logoff" + b"_" + HOSTNAME + b"_" + CLIENT_ID)
+    c.publish(b"smarty_control", b"logoff" + b"_" + hostname + b"_" + client_id)
     c.disconnect()
