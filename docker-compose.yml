@@ -12,7 +12,7 @@ services:
             dockerfile: Dockerfile-logger
         working_dir: /usr/logger
         command: julia src/SmartyLogger.jl
-        restart: "no"
+        restart: "unless-stopped"
         env_file:
             - "logger.env"
         volumes:
