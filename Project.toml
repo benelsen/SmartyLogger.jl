@@ -1,8 +1,16 @@
+name = "SmartyLogger"
+uuid = "73705c9e-77ae-4495-8608-616d8e12d886"
+authors = ["Ben Elsen <mail@benelsen.com>"]
+version = "0.0.0"
+
 [deps]
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
-MQTT = "e10d9536-0ba7-5b0f-be19-024cce3632bb"
+MQTT = "572a640e-f7b4-11e8-215e-e1fc97963a1b"
 Parameters = "d96e819e-fc66-5662-9728-84c9c7592b0a"
 Smarty = "111ea41c-f413-11e8-0303-456ea3930024"
 TimeZones = "f269a46b-ccf7-5d73-abea-4c690281aa53"
+
+[compat]
+julia = "^1.2"

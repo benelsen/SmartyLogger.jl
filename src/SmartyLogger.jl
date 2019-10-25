@@ -1,6 +1,8 @@
-using Logging, Dates
 @info "Starting…"
 
+import Base: parse
+
+using Logging, Dates
 using HTTP, Parameters, TimeZones
 using MQTT
 using Smarty
@@ -9,26 +11,20 @@ include("influx.jl")
 
 const key = hex2bytes(ENV["SMARTY_KEY"])
 
-const influxdb_host = "db"
-const influxdb_port = 8086
+const INFLUXDB_HOST = ENV["INFLUXDB_HOST"]
+const INFLUXDB_PORT = parse(Int, ENV["INFLUXDB_PORT"])
+const INFLUXDB_USER = ENV["INFLUXDB_USER"]
+const INFLUXDB_PASS = ENV["INFLUXDB_PASS"]
 
-const mqtt_broker_host = "broker"
-const mqtt_broker_port = 1883
+const MQTT_BROKER_HOST = ENV["MQTT_BROKER_HOST"]
+const MQTT_BROKER_PORT = parse(Int, ENV["MQTT_BROKER_PORT"])
+const MQTT_BROKER_USER = ENV["MQTT_BROKER_USER"]
+const MQTT_BROKER_PASS = ENV["MQTT_BROKER_PASS"]
 
-# using Sockets
-# const socat_host = "socat"
-# const socat_port = 58100
+const LOG_ENCRYPTED = parse(Bool, ENV["LOG_ENCRYPTED"])
+const LOG_PLAINTEXT = parse(Bool, ENV["LOG_PLAINTEXT"])
 
-# using PiGPIO
-# const pigpiod_host = "pigpiod"
-# const pigpiod_port = 8888
-
-# const pi = PiGPIO.Pi(host = pigpiod_host, port = pigpiod_port)
-# PiGPIO.set_mode(pi, 24, PiGPIO.OUTPUT)
-# PiGPIO.write(pi, 24, PiGPIO.HIGH)
-
-function reader(input_io::IO, channel_encrypted::Channel{EncryptedPacket}, log_bin_io::IO)
-
+function reader(input_io::IO, channel_encrypted::Channel{EncryptedPacket}, log_bin_io::Union{IO, Nothing} = nothing)
     while !eof(input_io)
         @debug "$(now_utc_string()): " * "reader: trying to read from input"
         try
@@ -36,8 +32,10 @@ function reader(input_io::IO, channel_encrypted::Channel{EncryptedPacket}, log_b
             @debug "$(now_utc_string()): " * "reader: read EncryptedPacket"
             put!(channel_encrypted, p)
             @debug "$(now_utc_string()): " * "reader: put EncryptedPacket into channel"
-            write(log_bin_io, p)
-            @debug "$(now_utc_string()): " * "reader: wrote EncryptedPacket to log.bin"
+            if !isnothing(log_bin_io)
+                write(log_bin_io, p)
+                @debug "$(now_utc_string()): " * "reader: wrote EncryptedPacket to log.bin"
+            end
         catch e
             if isa(e, ErrorException) && e.msg == "Could not parse EncryptedPacket. Unexpected start byte"
                 @warn "$(now_utc_string()): " * "unexpected start byte"
@@ -49,11 +47,11 @@ function reader(input_io::IO, channel_encrypted::Channel{EncryptedPacket}, log_b
                 # rethrow()
             end
         end
-        yield()
     end
+    @debug "end reader"
 end
 
-function decrypt(channel_encrypted::Channel{EncryptedPacket}, channel_decrypted::Channel{DecryptedPacket}, log_txt_io::IO)
+function decrypt(channel_encrypted::Channel{EncryptedPacket}, channel_decrypted::Channel{DecryptedPacket}, log_txt_io::Union{IO, Nothing} = nothing)
     while true
         encrypted_packet = take!(channel_encrypted)
         @debug "$(now_utc_string()): " * "decrypt: received EncryptedPacket"
@@ -62,11 +60,14 @@ function decrypt(channel_encrypted::Channel{EncryptedPacket}, channel_decrypted:
         put!(channel_decrypted, decrypted_packet)
         @debug "$(now_utc_string()): " * "decrypt: put DecryptedPacket into channel"
 
-        plaintext = String(deepcopy(decrypted_packet.plaintext))
-        write(log_txt_io, plaintext, "\n")
-        @debug "$(now_utc_string()): " * "decrypt: wrote DecryptedPacket to log.txt"
+        if !isnothing(log_txt_io)
+            plaintext = String(deepcopy(decrypted_packet.plaintext))
+            write(log_txt_io, plaintext, "\n")
+            @debug "$(now_utc_string()): " * "decrypt: wrote DecryptedPacket to log.txt"
+        end
         yield()
     end
+    @debug "end decrypt"
 end
 
 function parse(channel_decrypted::Channel{DecryptedPacket}, channel_parsed::Channel{ParsedPacket})
@@ -87,6 +88,7 @@ function parse(channel_decrypted::Channel{DecryptedPacket}, channel_parsed::Chan
 
         yield()
     end
+    @debug "end parse"
 end
 
 function dbinsert(channel_parsed::Channel{ParsedPacket})
@@ -98,9 +100,12 @@ function dbinsert(channel_parsed::Channel{ParsedPacket})
         @debug "$(now_utc_string()): " * "dbinsert: create lineprotocol"
 
         try
-            res = HTTP.post("http://$(influxdb_host):$(influxdb_port)/write", [], lp;
+            res = HTTP.post(
+                "https://$(INFLUXDB_USER):$(INFLUXDB_PASS)@$(INFLUXDB_HOST):$(INFLUXDB_PORT)/write", [], lp;
                 query = ["precision" => "ms", "db" => "smarty"],
-                retry_non_idempotent = true)
+                retry_non_idempotent = true,
+                basic_authorization = true,
+                require_ssl_verification = false)
 
             ts_packet = Dates.format(parsed_packet.datetime, dateformat"YYYY-mm-ddTHH:MM:SS.sss")
             @info "$(now_utc_string()): " * "packet $(parsed_packet.frame_counter) ($(ts_packet)) successfully processed"
@@ -108,7 +113,7 @@ function dbinsert(channel_parsed::Channel{ParsedPacket})
             if e isa HTTP.StatusError
                 @warn "$(now_utc_string()): " * "db insert failed (http status code $(e.status))" e
                 put!(channel_parsed, parsed_packet)
-            elseif e isa IOError
+            elseif e isa Base.IOError
                 @warn "$(now_utc_string()): " * "db insert failed (IOError)" e
                 put!(channel_parsed, parsed_packet)
             else
@@ -118,6 +123,7 @@ function dbinsert(channel_parsed::Channel{ParsedPacket})
         end
         yield()
     end
+    @debug "end dbinsert"
 end
 
 now_utc_string() = Dates.format(now(UTC), dateformat"YYYY-mm-ddTHH:MM:SS.sss")
@@ -125,13 +131,17 @@ now_utc_string() = Dates.format(now(UTC), dateformat"YYYY-mm-ddTHH:MM:SS.sss")
 function run_()
     @debug "$(now_utc_string()): " * "Args:" ARGS
 
-    @debug "$(now_utc_string()): " * "Opening log.bin"
-    log_bin_io = open("log/log.bin", "a")
-    atexit(() -> close(log_bin_io))
+    if LOG_ENCRYPTED
+        @debug "$(now_utc_string()): " * "Opening log.bin"
+        log_bin_io = open("log/log.bin", "a")
+        atexit(() -> close(log_bin_io))
+    end
 
-    @debug "$(now_utc_string()): " * "Opening log.txt"
-    log_txt_io = open("log/log.txt", "a")
-    atexit(() -> close(log_txt_io))
+    if LOG_PLAINTEXT
+        @debug "$(now_utc_string()): " * "Opening log.txt"
+        log_txt_io = open("log/log.txt", "a")
+        atexit(() -> close(log_txt_io))
+    end
 
     @debug "$(now_utc_string()): " * "Opening Channel{EncryptedPacket}"
     channel_encrypted = Channel{EncryptedPacket}(600)
@@ -153,37 +163,41 @@ function run_()
     task_parse = @async parse(channel_decrypted, channel_parsed)
 
     @debug "$(now_utc_string()): " * "Starting task_decrypt"
-    task_decrypt = @async decrypt(channel_encrypted, channel_decrypted, log_txt_io)
-
+    task_decrypt = @async decrypt(channel_encrypted, channel_decrypted, LOG_PLAINTEXT ? log_txt_io : nothing)
 
     # connect using mqtt
     @debug "$(now_utc_string()): " * "Creating mqtt client"
-    io = PipeBuffer()
-    function on_msg(topic, data)
-        if topic == "smarty_data"
-            write(io, data)
-            reader(io, channel_encrypted, log_bin_io)
+
+    function on_disconnect(reason)
+        @info "MQTT disconnected"
+        if !isnothing(reason)
+            @info reason
         end
     end
-    client = Client(on_msg)
-    connect(client, mqtt_broker_host, mqtt_broker_port)
-    subscribe(client, ("smarty_data", QOS_0))
+
+    function on_msg(topic, data)
+        # @debug topic data
+        if topic == "smarty_data"
+            io = PipeBuffer()
+            write(io, data)
+            reader(io, channel_encrypted, LOG_ENCRYPTED ? log_bin_io : nothing)
+        end
+    end
+
+    @debug "$(now_utc_string()): " * "Creating mqtt Client"
+    client = Client(on_msg, on_disconnect, 0)
+
+    @debug "$(now_utc_string()): " * "Creating mqtt ConnectOpts"
+    connect_opts = ConnectOpts(MQTT_BROKER_HOST, MQTT_BROKER_PORT)
+    connect_opts.username = MQTT_BROKER_USER
+    connect_opts.password = Vector{UInt8}(MQTT_BROKER_USER)
+    connect_opts.client_id = "SmartyLogger"
+
+    @debug "$(now_utc_string()): " * "Connecting to mqtt broker"
+    connect(client, connect_opts)
     atexit(() -> disconnect(client))
 
-    # connect using a tcp socket
-    # @debug "$(now_utc_string()): " * "Opening tcp socket to socat"
-    # sock = connect(socat_host, socat_port)
-    # atexit(() -> close(sock))
-
-    # support for serial ports is still unsatisfying
-    # sp = open("/dev/ttyAMA0", 115200)
-
-    # @debug "$(now_utc_string()): " * "Starting task_reader"
-    # task_reader = @async reader(io, channel_encrypted, log_bin_io)
-
-
-    # @info "$(now_utc_string()): " * "Setting low"
-    # PiGPIO.write(pi, 24, PiGPIO.LOW)
+    subscribe(client, ("smarty_data", MQTT.AT_LEAST_ONCE))
 
     @info "$(now_utc_string()): " * "Ready"
     yield()

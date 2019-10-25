@@ -1,18 +1,8 @@
 version: "3"
 
 volumes:
-    pg_db_data:
-    influx_db_data:
-    influx_db_conf:
-    mosquitto_conf:
-    mosquitto_data:
-    mosquitto_log:
     log_data:
     julia_cache:
-
-# networks:
-    # dumbhome_default:
-        # external: true
 
 services:
 
@@ -21,78 +11,14 @@ services:
             context: .
             dockerfile: Dockerfile-logger
         working_dir: /usr/logger
-        command: ./wait-for-it.sh broker:1883 -s -- ./wait-for-it.sh db:8086 -s -- julia --project=. src/SmartyLogger.jl
-        restart: unless-stopped
+        command: julia src/SmartyLogger.jl
+        restart: "no"
         env_file:
             - "logger.env"
-        depends_on:
-            - "db"
-            - "broker"
         volumes:
             - "log_data:/usr/logger/log"
             - "julia_cache:/root/.julia"
-        networks:
-            - default
-            # - dumbhome_default
-
-    broker:
-        image: eclipse-mosquitto
-        restart: unless-stopped
-        ports:
-            - "1883:1883"
-            - "9001:9001"
-        volumes:
-            - mosquitto_conf:/mosquitto/config/
-            - mosquitto_data:/mosquitto/data
-            - mosquitto_log:/mosquitto/log
-
-    db:
-        image: influxdb
-        restart: unless-stopped
-        ports:
-            - "8086"
-            - "8088"
-            - "18089/udp"
-        volumes:
-            - influx_db_data:/var/lib/influxdb/
-            - influx_db_conf:/etc/influxdb/
-
-    grafana:
-        image: grafana/grafana
-        ports:
-            - "3000:3000"
-        networks:
-            - default
-            # - dumbhome_default
-        environment:
-            - GF_SECURITY_ADMIN_PASSWORD=changeme
-        depends_on:
-            - "db"
-
-    socat:
-        build:
-            context: .
-            dockerfile: Dockerfile-socat
-        command: socat -d -d TCP-LISTEN:58100,reuseaddr,fork file:/dev/ttyAMA0,b115200,raw,echo=0
-        restart: unless-stopped
-        devices:
-            - "/dev/ttyAMA0:/dev/ttyAMA0"
-
-    # TODO: breaks on reboots
-    # WORKAROUND: Just hardwire the enable pin to low ¯\_(ツ)_/¯
-    pigpiod:
-        build:
-            context: .
-            dockerfile: Dockerfile-pigpiod
-        privileged: true
-        restart: unless-stopped
-        devices:
-            - "/dev/gpiomem:/dev/gpiomem"
-
-    pg_db:
-        image: postgres
-        restart: unless-stopped
-        ports:
-            - "5432"
-        volumes:
-            - "pg_db_data:/var/lib/postgresql/data"
+        network_mode: bridge
+        external_links:
+            - influxdb
+            - mqtt-broker
