@@ -9,20 +9,22 @@ using Smarty
 
 include("influx.jl")
 
-const key = hex2bytes(ENV["SMARTY_KEY"])
+const SMARTY_KEY = haskey(ENV, "SMARTY_KEY") ? hex2bytes(ENV["SMARTY_KEY"]) : throw(error("Must provide SMARTY_KEY"))
 
-const INFLUXDB_HOST = ENV["INFLUXDB_HOST"]
-const INFLUXDB_PORT = parse(Int, ENV["INFLUXDB_PORT"])
-const INFLUXDB_USER = ENV["INFLUXDB_USER"]
-const INFLUXDB_PASS = ENV["INFLUXDB_PASS"]
+const CLIENT_ID = haskey(ENV, "CLIENT_ID") ? ENV["CLIENT_ID"] : "SmartyLogger"
 
-const MQTT_BROKER_HOST = ENV["MQTT_BROKER_HOST"]
-const MQTT_BROKER_PORT = parse(Int, ENV["MQTT_BROKER_PORT"])
-const MQTT_BROKER_USER = ENV["MQTT_BROKER_USER"]
-const MQTT_BROKER_PASS = ENV["MQTT_BROKER_PASS"]
+const INFLUXDB_HOST = haskey(ENV, "INFLUXDB_HOST") ? ENV["INFLUXDB_HOST"] : "localhost"
+const INFLUXDB_PORT = haskey(ENV, "INFLUXDB_PORT") ? parse(Int, ENV["INFLUXDB_PORT"]) : 8086
+const INFLUXDB_USER = haskey(ENV, "INFLUXDB_USER") ? ENV["INFLUXDB_USER"] : ""
+const INFLUXDB_PASS = haskey(ENV, "INFLUXDB_PASS") ? ENV["INFLUXDB_PASS"] : ""
 
-const LOG_ENCRYPTED = parse(Bool, ENV["LOG_ENCRYPTED"])
-const LOG_PLAINTEXT = parse(Bool, ENV["LOG_PLAINTEXT"])
+const MQTT_BROKER_HOST = haskey(ENV, "MQTT_BROKER_HOST") ? ENV["MQTT_BROKER_HOST"] : "localhost"
+const MQTT_BROKER_PORT = haskey(ENV, "MQTT_BROKER_PORT") ? parse(Int, ENV["MQTT_BROKER_PORT"]) : 1883
+const MQTT_BROKER_USER = haskey(ENV, "MQTT_BROKER_USER") ? ENV["MQTT_BROKER_USER"] : ""
+const MQTT_BROKER_PASS = haskey(ENV, "MQTT_BROKER_PASS") ? ENV["MQTT_BROKER_PASS"] : ""
+
+const LOG_ENCRYPTED = haskey(ENV, "LOG_ENCRYPTED") ? parse(Bool, ENV["LOG_ENCRYPTED"]) : false
+const LOG_PLAINTEXT = haskey(ENV, "LOG_PLAINTEXT") ? parse(Bool, ENV["LOG_PLAINTEXT"]) : false
 
 function reader(input_io::IO, channel_encrypted::Channel{EncryptedPacket}, log_bin_io::Union{IO, Nothing} = nothing)
     while !eof(input_io)
@@ -55,7 +57,7 @@ function decrypt(channel_encrypted::Channel{EncryptedPacket}, channel_decrypted:
     while true
         encrypted_packet = take!(channel_encrypted)
         @debug "$(now_utc_string()): " * "decrypt: received EncryptedPacket"
-        decrypted_packet = decrypt_smarty_packet(key, encrypted_packet)
+        decrypted_packet = decrypt_smarty_packet(SMARTY_KEY, encrypted_packet)
         @debug "$(now_utc_string()): " * "decrypt: decrypted EncryptedPacket"
         put!(channel_decrypted, decrypted_packet)
         @debug "$(now_utc_string()): " * "decrypt: put DecryptedPacket into channel"
@@ -126,6 +128,18 @@ function dbinsert(channel_parsed::Channel{ParsedPacket})
     @debug "end dbinsert"
 end
 
+function logwrite(channel_parsed::Channel{ParsedPacket})
+    while true
+        parsed_packet = take!(channel_parsed)
+        @debug "$(now_utc_string()): " * "logwrite: received ParsedPacket"
+
+        @info parsed_packet
+
+        yield()
+    end
+    @debug "end dbinsert"
+end
+
 now_utc_string() = Dates.format(now(UTC), dateformat"YYYY-mm-ddTHH:MM:SS.sss")
 
 function run_()
@@ -159,6 +173,9 @@ function run_()
     @debug "$(now_utc_string()): " * "Starting task_dbinsert"
     task_dbinsert = @async dbinsert(channel_parsed)
 
+    # @debug "$(now_utc_string()): " * "Starting task_logwrite"
+    # task_logwrite = @async logwrite(channel_parsed)
+
     @debug "$(now_utc_string()): " * "Starting task_parse"
     task_parse = @async parse(channel_decrypted, channel_parsed)
 
@@ -191,7 +208,7 @@ function run_()
     connect_opts = ConnectOpts(MQTT_BROKER_HOST, MQTT_BROKER_PORT)
     connect_opts.username = MQTT_BROKER_USER
     connect_opts.password = Vector{UInt8}(MQTT_BROKER_USER)
-    connect_opts.client_id = "SmartyLogger"
+    connect_opts.client_id = CLIENT_ID
 
     @debug "$(now_utc_string()): " * "Connecting to mqtt broker"
     connect(client, connect_opts)
