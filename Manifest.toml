@@ -120,7 +120,7 @@ uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 
 [[Smarty]]
 deps = ["Dates", "Logging", "MbedTLS", "Parameters", "TimeZones"]
-git-tree-sha1 = "634376edf0a7cc89426af514bdc94d2f2f27af92"
+git-tree-sha1 = "fdfbb86b077cce1c944d38c3496392876220ac51"
 repo-rev = "master"
 repo-url = "https://github.com/benelsen/Smarty.jl"
 uuid = "111ea41c-f413-11e8-0303-456ea3930024"
