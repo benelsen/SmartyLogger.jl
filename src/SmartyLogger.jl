@@ -190,6 +190,7 @@ function run_()
         if !isnothing(reason)
             @info reason
         end
+        exit(1)
     end
 
     function on_msg(topic, data)

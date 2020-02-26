@@ -1,4 +1,4 @@
-FROM julia:1.2
+FROM julia:1.4
 
 WORKDIR /usr/logger/
 ENV JULIA_PROJECT=/usr/logger
