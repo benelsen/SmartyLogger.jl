@@ -10,7 +10,7 @@ services:
         build:
             context: .
             dockerfile: Dockerfile-logger
-        working_dir: /usr/logger
+        working_dir: /usr/logger/
         command: julia src/SmartyLogger.jl
         restart: "unless-stopped"
         env_file:

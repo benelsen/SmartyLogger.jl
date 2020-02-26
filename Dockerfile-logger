@@ -1,17 +1,15 @@
 FROM julia:1.4
 
 WORKDIR /usr/logger/
-ENV JULIA_PROJECT=/usr/logger
+ENV JULIA_PROJECT=/usr/logger/
 
-RUN julia -e 'using Pkg; pkg"up"'
-
-COPY Manifest.toml /usr/logger/Manifest.toml
 COPY Project.toml /usr/logger/Project.toml
+COPY Manifest.toml /usr/logger/Manifest.toml
 
-RUN julia --project=. -e 'using Pkg; pkg"instantiate"'
-RUN julia --project=. -e 'using Pkg; pkg"precompile"'
+RUN julia -e 'using Pkg; Pkg.instantiate()'
 
 COPY src/*.jl /usr/logger/src/
 
+RUN julia -e 'using Pkg; Pkg.status()'
 
 CMD ["julia", "-v"]
